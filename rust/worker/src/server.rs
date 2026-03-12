@@ -1003,6 +1003,7 @@ mod tests {
                 embedding: false,
                 metadata: false,
             }),
+            order: None,
         };
 
         // error parsing filter
@@ -1036,6 +1037,7 @@ mod tests {
                 embedding: false,
                 metadata: false,
             }),
+            order: None,
         };
 
         // invalid collection uuid

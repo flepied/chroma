@@ -467,6 +467,7 @@ impl InMemoryFrontend {
                     request.r#where,
                     request.limit,
                     0,
+                    None,
                     IncludeList::empty(),
                 )
                 .unwrap(),
@@ -573,6 +574,7 @@ impl InMemoryFrontend {
             r#where,
             offset,
             limit,
+            order,
             ..
         } = request;
 
@@ -594,6 +596,7 @@ impl InMemoryFrontend {
                 },
                 filter,
                 limit: Limit { offset, limit },
+                order,
                 proj: Projection {
                     document: include.0.contains(&Include::Document),
                     embedding: include.0.contains(&Include::Embedding),
@@ -795,6 +798,7 @@ mod tests {
             })),
             None,
             0,
+            None,
             IncludeList::default_get(),
         )
         .unwrap();
@@ -814,6 +818,7 @@ mod tests {
             })),
             None,
             0,
+            None,
             IncludeList::default_get(),
         )
         .unwrap();

@@ -1232,6 +1232,7 @@ impl ServiceBasedFrontend {
                     },
                     filter,
                     limit: Limit { offset: 0, limit },
+                    order: None,
                     proj: Projection {
                         document: false,
                         embedding: false,
@@ -1588,6 +1589,7 @@ impl ServiceBasedFrontend {
             r#where,
             limit,
             offset,
+            order,
             include,
             ..
         }: GetRequest,
@@ -1633,6 +1635,7 @@ impl ServiceBasedFrontend {
                     where_clause: r#where,
                 },
                 limit: Limit { offset, limit },
+                order,
                 proj: Projection {
                     document: include.0.contains(&Include::Document),
                     embedding: include.0.contains(&Include::Embedding),

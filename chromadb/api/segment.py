@@ -652,6 +652,8 @@ class SegmentAPI(ServerAPI):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
         tenant: str = DEFAULT_TENANT,
         database: str = DEFAULT_DATABASE,

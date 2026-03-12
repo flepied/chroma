@@ -1222,6 +1222,8 @@ class FastAPI(Server):
                 limit=get.limit,
                 offset=get.offset,
                 where_document=get.where_document,
+                order_by=get.order["metadata_key"] if get.order else None,
+                order=get.order.get("direction", "asc") if get.order else "asc",
                 include=get.include,
                 tenant=tenant,
                 database=database_name,

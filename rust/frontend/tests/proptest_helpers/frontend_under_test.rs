@@ -125,6 +125,7 @@ impl StateMachineTest for FrontendUnderTest {
                                         request.r#where.clone(),
                                         request.limit,
                                         0,
+                                        None,
                                         IncludeList(vec![]),
                                     )
                                     .unwrap(),
@@ -336,6 +337,7 @@ impl StateMachineTest for FrontendUnderTest {
                         None,
                         None,
                         0,
+                        None,
                         IncludeList::default_get(),
                     )
                     .unwrap(),
@@ -352,6 +354,7 @@ impl StateMachineTest for FrontendUnderTest {
                         None,
                         None,
                         0,
+                        None,
                         IncludeList::default_get(),
                     )
                     .unwrap(),

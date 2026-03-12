@@ -129,6 +129,8 @@ class AsyncCollection(CollectionCommon["AsyncServerAPI"]):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = ["metadatas", "documents"],
     ) -> GetResult:
         """Get embeddings and their associate data from the data store. If no ids or where filter is provided returns
@@ -140,6 +142,8 @@ class AsyncCollection(CollectionCommon["AsyncServerAPI"]):
             limit: The number of documents to return. Optional.
             offset: The offset to start returning results from. Useful for paging results with limit. Optional.
             where_document: A WhereDocument type dict used to filter by the documents. E.g. `{"$contains": "hello"}`. Optional.
+            order_by: Metadata key to order results by. Optional.
+            order: Sort direction for metadata ordering, either `"asc"` or `"desc"`. Optional.
             include: A list of what to include in the results. Can contain `"embeddings"`, `"metadatas"`, `"documents"`. Ids are always included. Defaults to `["metadatas", "documents"]`. Optional.
 
         Returns:
@@ -158,6 +162,8 @@ class AsyncCollection(CollectionCommon["AsyncServerAPI"]):
             ids=get_request["ids"],
             where=get_request["where"],
             where_document=get_request["where_document"],
+            order_by=order_by,
+            order=order,
             include=get_request["include"],
             limit=limit,
             offset=offset,

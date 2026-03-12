@@ -1,4 +1,7 @@
-use crate::errors::{ChromaPyResult, InvalidDatabaseNameError, WrappedPyErr, WrappedUuidError};
+use crate::errors::{
+    ChromaPyResult, InvalidDatabaseNameError, InvalidOrderDirectionError, WrappedPyErr,
+    WrappedUuidError,
+};
 use chroma_cache::FoyerCacheConfig;
 use chroma_cli::chroma_cli;
 use chroma_config::{registry::Registry, Configurable};
@@ -613,7 +616,7 @@ impl Bindings {
     }
 
     #[pyo3(
-        signature = (collection_id, ids = None, r#where = None, limit = None, offset = 0, where_document = None, include = ["metadatas".to_string(), "documents".to_string()].to_vec(), tenant = DEFAULT_TENANT.to_string(), database = DEFAULT_DATABASE.to_string())
+        signature = (collection_id, ids = None, r#where = None, limit = None, offset = 0, where_document = None, order_by = None, order = "asc".to_string(), include = ["metadatas".to_string(), "documents".to_string()].to_vec(), tenant = DEFAULT_TENANT.to_string(), database = DEFAULT_DATABASE.to_string())
     )]
     #[allow(clippy::too_many_arguments)]
     fn get(
@@ -624,6 +627,8 @@ impl Bindings {
         limit: Option<u32>,
         offset: u32,
         where_document: Option<String>,
+        order_by: Option<String>,
+        order: String,
         include: Vec<String>,
         tenant: String,
         database: String,
@@ -640,6 +645,23 @@ impl Bindings {
         );
 
         let include = IncludeList::try_from(include)?;
+        let order = if let Some(metadata_key) = order_by {
+            Some(chroma_types::GetOrder {
+                metadata_key,
+                direction: match order.as_str() {
+                    "asc" => chroma_types::GetOrderDirection::Asc,
+                    "desc" => chroma_types::GetOrderDirection::Desc,
+                    _ => {
+                        return Err(InvalidOrderDirectionError(
+                            "order must be either 'asc' or 'desc'".to_string(),
+                        )
+                        .into())
+                    }
+                },
+            })
+        } else {
+            None
+        };
 
         let request = chroma_types::GetRequest::try_new(
             tenant,
@@ -649,6 +671,7 @@ impl Bindings {
             r#where,
             limit,
             offset,
+            order,
             include,
         )?;
 

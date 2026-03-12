@@ -70,3 +70,13 @@ impl ChromaError for InvalidDatabaseNameError {
         ErrorCodes::InvalidArgument
     }
 }
+
+#[derive(Error, Debug)]
+#[error("{0}")]
+pub(crate) struct InvalidOrderDirectionError(pub String);
+
+impl ChromaError for InvalidOrderDirectionError {
+    fn code(&self) -> ErrorCodes {
+        ErrorCodes::InvalidArgument
+    }
+}

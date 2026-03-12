@@ -501,6 +501,8 @@ class FastAPI(BaseHTTPClient, ServerAPI):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
         tenant: str = DEFAULT_TENANT,
         database: str = DEFAULT_DATABASE,
@@ -517,6 +519,9 @@ class FastAPI(BaseHTTPClient, ServerAPI):
                 "limit": limit,
                 "offset": offset,
                 "where_document": where_document,
+                "order": None
+                if order_by is None
+                else {"metadata_key": order_by, "direction": order},
                 "include": filtered_include,
             },
         )

@@ -29,6 +29,16 @@ message LimitOperator {
     optional uint32 limit = 2;
 }
 
+enum GetOrderDirection {
+    GET_ORDER_DIRECTION_ASC = 0;
+    GET_ORDER_DIRECTION_DESC = 1;
+}
+
+message GetOrder {
+    string metadata_key = 1;
+    GetOrderDirection direction = 2;
+}
+
 message ProjectionOperator {
     bool document = 1;
     bool embedding = 2;
@@ -55,6 +65,7 @@ message GetPlan {
     FilterOperator filter = 2;
     LimitOperator limit = 3;
     ProjectionOperator projection = 4;
+    optional GetOrder order = 5;
 }
 
 message ProjectionRecord {

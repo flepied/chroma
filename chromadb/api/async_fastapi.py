@@ -534,6 +534,8 @@ class AsyncFastAPI(BaseHTTPClient, AsyncServerAPI):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
         tenant: str = DEFAULT_TENANT,
         database: str = DEFAULT_DATABASE,
@@ -550,6 +552,9 @@ class AsyncFastAPI(BaseHTTPClient, AsyncServerAPI):
                 "limit": limit,
                 "offset": offset,
                 "where_document": where_document,
+                "order": None
+                if order_by is None
+                else {"metadata_key": order_by, "direction": order},
                 "include": filtered_include,
             },
         )

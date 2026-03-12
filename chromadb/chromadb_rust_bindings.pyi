@@ -176,6 +176,8 @@ class Bindings:
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[str] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = ["metadatas", "documents"],  # type: ignore[list-item]
         tenant: str = DEFAULT_TENANT,
         database: str = DEFAULT_DATABASE,

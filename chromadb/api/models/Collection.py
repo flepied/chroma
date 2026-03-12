@@ -131,6 +131,8 @@ class Collection(CollectionCommon["ServerAPI"]):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = ["metadatas", "documents"],
     ) -> GetResult:
         """Retrieve records from the collection.
@@ -144,6 +146,8 @@ class Collection(CollectionCommon["ServerAPI"]):
             limit: Maximum number of results to return.
             offset: Number of results to skip before returning.
             where_document: A WhereDocument filter used to filter based on K.DOCUMENT.
+            order_by: Metadata key to order results by.
+            order: Sort direction for metadata ordering, either "asc" or "desc".
             include: Fields to include in results. Can contain "embeddings", "metadatas", "documents", "uris". Defaults to "metadatas" and "documents".
 
         Returns:
@@ -161,6 +165,8 @@ class Collection(CollectionCommon["ServerAPI"]):
             ids=get_request["ids"],
             where=get_request["where"],
             where_document=get_request["where_document"],
+            order_by=order_by,
+            order=order,
             include=get_request["include"],
             limit=limit,
             offset=offset,

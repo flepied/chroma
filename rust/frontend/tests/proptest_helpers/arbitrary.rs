@@ -263,6 +263,7 @@ fn arbitrary_get_request(
                 None,
                 None,
                 0,
+                None,
                 IncludeList(vec![Include::Metadata, Include::Document]),
             )
             .unwrap(),
@@ -333,6 +334,7 @@ fn arbitrary_get_request(
                         filter.map(|filter| filter.clause),
                         limit,
                         offset,
+                        None,
                         include_list,
                     )
                     .unwrap(),
@@ -358,6 +360,7 @@ fn arbitrary_query_request(
                 None,
                 None,
                 0,
+                None,
                 IncludeList(vec![Include::Metadata, Include::Document]),
             )
             .unwrap(),

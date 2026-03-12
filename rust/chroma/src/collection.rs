@@ -341,6 +341,7 @@ impl ChromaCollection {
             r#where,
             limit,
             offset.unwrap_or_default(),
+            None,
             include.unwrap_or_else(IncludeList::default_get),
         )?;
         let request = request.into_payload()?;

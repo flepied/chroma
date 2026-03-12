@@ -1796,12 +1796,35 @@ pub enum WhereError {
 /// must be provided. Use `include` to specify which fields to return in the response.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "lowercase")]
+pub enum GetOrderDirection {
+    Asc,
+    Desc,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+pub struct GetOrder {
+    pub metadata_key: String,
+    #[serde(default)]
+    pub direction: GetOrderDirection,
+}
+
+impl Default for GetOrderDirection {
+    fn default() -> Self {
+        Self::Asc
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct GetRequestPayload {
     pub ids: Option<Vec<String>>,
     #[serde(flatten)]
     pub where_fields: RawWhereFields,
     pub limit: Option<u32>,
     pub offset: Option<u32>,
+    pub order: Option<GetOrder>,
     #[serde(default = "IncludeList::default_get")]
     pub include: IncludeList,
 }
@@ -1817,6 +1840,7 @@ pub struct GetRequest {
     pub r#where: Option<Where>,
     pub limit: Option<u32>,
     pub offset: u32,
+    pub order: Option<GetOrder>,
     pub include: IncludeList,
 }
 
@@ -1830,6 +1854,7 @@ impl GetRequest {
         r#where: Option<Where>,
         limit: Option<u32>,
         offset: u32,
+        order: Option<GetOrder>,
         include: IncludeList,
     ) -> Result<Self, ChromaValidationError> {
         let request = Self {
@@ -1840,6 +1865,7 @@ impl GetRequest {
             r#where,
             limit,
             offset,
+            order,
             include,
         };
         request.validate().map_err(ChromaValidationError::from)?;
@@ -1857,6 +1883,7 @@ impl GetRequest {
             where_fields,
             limit: self.limit,
             offset: Some(self.offset),
+            order: self.order,
             include: self.include,
         })
     }

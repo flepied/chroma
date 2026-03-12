@@ -19,6 +19,7 @@ use chroma_types::{
         Projection, ProjectionOutput, ProjectionRecord,
     },
     plan::{Count, Get, Knn},
+    GetOrderDirection,
     test_segment, BooleanOperator, Chunk, Collection, CollectionAndSegments, CompositeExpression,
     ContainsOperator, DocumentExpression, DocumentOperator, KnnIndex, LogRecord, Metadata,
     MetadataComparison, MetadataExpression, MetadataSetValue, MetadataValue, Operation,
@@ -215,6 +216,72 @@ pub struct TestReferenceSegment {
 }
 
 impl TestReferenceSegment {
+    fn sort_records(
+        records: &mut [(u32, ProjectionRecord)],
+        order: &chroma_types::GetOrder,
+    ) {
+        records.sort_by(|(_, left), (_, right)| {
+            let left_value = left
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get(&order.metadata_key));
+            let right_value = right
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get(&order.metadata_key));
+
+            let value_order = match (left_value, right_value) {
+                (Some(MetadataValue::Int(lhs)), Some(MetadataValue::Int(rhs))) => match order
+                    .direction
+                {
+                    GetOrderDirection::Asc => lhs.cmp(rhs),
+                    GetOrderDirection::Desc => lhs.cmp(rhs).reverse(),
+                },
+                (Some(MetadataValue::Float(lhs)), Some(MetadataValue::Float(rhs))) => {
+                    let base = lhs.partial_cmp(rhs).unwrap_or(std::cmp::Ordering::Equal);
+                    match order.direction {
+                        GetOrderDirection::Asc => base,
+                        GetOrderDirection::Desc => base.reverse(),
+                    }
+                }
+                (Some(MetadataValue::Int(lhs)), Some(MetadataValue::Float(rhs))) => {
+                    let base = (*lhs as f64)
+                        .partial_cmp(rhs)
+                        .unwrap_or(std::cmp::Ordering::Equal);
+                    match order.direction {
+                        GetOrderDirection::Asc => base,
+                        GetOrderDirection::Desc => base.reverse(),
+                    }
+                }
+                (Some(MetadataValue::Float(lhs)), Some(MetadataValue::Int(rhs))) => {
+                    let base = lhs
+                        .partial_cmp(&(*rhs as f64))
+                        .unwrap_or(std::cmp::Ordering::Equal);
+                    match order.direction {
+                        GetOrderDirection::Asc => base,
+                        GetOrderDirection::Desc => base.reverse(),
+                    }
+                }
+                (Some(MetadataValue::Str(lhs)), Some(MetadataValue::Str(rhs))) => {
+                    match order.direction {
+                        GetOrderDirection::Asc => lhs.cmp(rhs),
+                        GetOrderDirection::Desc => lhs.cmp(rhs).reverse(),
+                    }
+                }
+                (Some(MetadataValue::Bool(lhs)), Some(MetadataValue::Bool(rhs))) => {
+                    match order.direction {
+                        GetOrderDirection::Asc => lhs.cmp(rhs),
+                        GetOrderDirection::Desc => lhs.cmp(rhs).reverse(),
+                    }
+                }
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
+                _ => std::cmp::Ordering::Equal,
+            };
+            value_order.then_with(|| left.id.cmp(&right.id))
+        });
+    }
+
     fn merge_meta(old_meta: Option<Metadata>, delta: Option<UpdateMetadata>) -> Option<Metadata> {
         let (deleted_keys, new_meta) = if let Some(m) = delta {
             let mut dk = HashSet::new();
@@ -372,7 +439,11 @@ impl TestReferenceSegment {
             .map(|(_, v)| v.clone())
             .collect::<Vec<_>>();
 
-        records.sort_by_key(|(oid, _)| *oid);
+        if let Some(ref order) = plan.order {
+            Self::sort_records(&mut records, order);
+        } else {
+            records.sort_by_key(|(oid, _)| *oid);
+        }
 
         Ok(GetResult {
             pulled_log_bytes: 0,

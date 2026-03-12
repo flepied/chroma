@@ -273,6 +273,8 @@ class BaseAPI(ABC):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
     ) -> GetResult:
         """[Internal] Returns entries from a collection specified by UUID.
@@ -283,6 +285,8 @@ class BaseAPI(ABC):
             limit: The maximum number of entries to return. Defaults to None.
             offset: The number of entries to skip before returning. Defaults to None.
             where_document: Conditional filtering on documents. Defaults to None.
+            order_by: Metadata key to order results by. Defaults to None.
+            order: Sort direction for metadata ordering. Defaults to "asc".
             include: The fields to include in the response.
                           Defaults to ["metadatas", "documents"].
         Returns:
@@ -754,6 +758,8 @@ class ServerAPI(BaseAPI, AdminAPI, Component):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
         tenant: str = DEFAULT_TENANT,
         database: str = DEFAULT_DATABASE,

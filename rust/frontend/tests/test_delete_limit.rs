@@ -362,6 +362,7 @@ async fn test_delete_by_where_with_limit_loop() {
                 None,
                 None,
                 0,
+                None,
                 IncludeList::default_get(),
             )
             .unwrap(),

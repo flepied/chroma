@@ -1,12 +1,15 @@
 venv
 .conda
 .git
+.config
 examples
 clients
 .hypothesis
 __pycache__
 .vscode
 *.egg-info
+.log
+*.log
 .pytest_cache
 **/node_modules
 target

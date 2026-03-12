@@ -165,6 +165,7 @@ impl LocalExecutor {
                         offset: 0,
                         limit: None,
                     },
+                    order: None,
                     proj: Default::default(),
                 };
 
@@ -275,6 +276,7 @@ impl LocalExecutor {
                     offset: 0,
                     limit: None,
                 },
+                order: None,
                 proj: Projection {
                     document: plan.proj.projection.document,
                     embedding: false,

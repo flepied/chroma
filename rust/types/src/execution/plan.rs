@@ -7,6 +7,7 @@ use super::{
 };
 use crate::{
     chroma_proto,
+    GetOrder, GetOrderDirection,
     operator::{Key, RankExpr},
     validators::{validate_group_by, validate_rank, validate_search_payload},
     Where,
@@ -68,6 +69,7 @@ pub struct Get {
     pub scan: Scan,
     pub filter: Filter,
     pub limit: Limit,
+    pub order: Option<GetOrder>,
     pub proj: Projection,
 }
 
@@ -88,6 +90,14 @@ impl TryFrom<chroma_proto::GetPlan> for Get {
                 .limit
                 .ok_or(QueryConversionError::field("limit"))?
                 .into(),
+            order: value.order.map(|order| GetOrder {
+                metadata_key: order.metadata_key,
+                direction: if order.direction == 1 {
+                    GetOrderDirection::Desc
+                } else {
+                    GetOrderDirection::Asc
+                },
+            }),
             proj: value
                 .projection
                 .ok_or(QueryConversionError::field("projection"))?
@@ -105,6 +115,13 @@ impl TryFrom<Get> for chroma_proto::GetPlan {
             filter: Some(value.filter.try_into()?),
             limit: Some(value.limit.into()),
             projection: Some(value.proj.into()),
+            order: value.order.map(|order| chroma_proto::GetOrder {
+                metadata_key: order.metadata_key,
+                direction: match order.direction {
+                    GetOrderDirection::Asc => 0,
+                    GetOrderDirection::Desc => 1,
+                },
+            }),
         })
     }
 }

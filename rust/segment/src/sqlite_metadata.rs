@@ -20,8 +20,8 @@ use chroma_types::{
         CountResult, Filter, GetResult, Limit, Projection, ProjectionOutput, ProjectionRecord, Scan,
     },
     plan::{Count, Get},
-    BooleanOperator, Chunk, CollectionUuid, CompositeExpression, ContainsOperator,
-    DocumentExpression, DocumentOperator, LogRecord, Metadata, MetadataComparison,
+    BooleanOperator, Chunk, CollectionUuid, CompositeExpression, ContainsOperator, DocumentExpression,
+    DocumentOperator, GetOrder, GetOrderDirection, LogRecord, Metadata, MetadataComparison,
     MetadataExpression, MetadataSetValue, MetadataValue, MetadataValueConversionError, Operation,
     OperationRecord, PrimitiveOperator, Schema, SegmentUuid, SetOperator, UpdateMetadata,
     UpdateMetadataValue, Where, CHROMA_DOCUMENT_KEY,
@@ -35,6 +35,67 @@ use sqlx::{Row, Sqlite, Transaction};
 use thiserror::Error;
 
 const SUBQ_ALIAS: &str = "filter_limit_subq";
+
+#[derive(Clone, Debug, PartialEq)]
+enum SortableMetadataValue {
+    Bool(bool),
+    Number(f64),
+    String(String),
+}
+
+impl PartialOrd for SortableMetadataValue {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Self::Bool(lhs), Self::Bool(rhs)) => lhs.partial_cmp(rhs),
+            (Self::Number(lhs), Self::Number(rhs)) => lhs.partial_cmp(rhs),
+            (Self::String(lhs), Self::String(rhs)) => lhs.partial_cmp(rhs),
+            _ => None,
+        }
+    }
+}
+
+fn sortable_metadata_value(
+    record: &ProjectionRecord,
+    order: &GetOrder,
+) -> Option<SortableMetadataValue> {
+    record
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get(&order.metadata_key))
+        .and_then(|value| match value {
+            MetadataValue::Bool(value) => Some(SortableMetadataValue::Bool(*value)),
+            MetadataValue::Int(value) => Some(SortableMetadataValue::Number(*value as f64)),
+            MetadataValue::Float(value) => Some(SortableMetadataValue::Number(*value)),
+            MetadataValue::Str(value) => Some(SortableMetadataValue::String(value.clone())),
+            MetadataValue::BoolArray(_)
+            | MetadataValue::IntArray(_)
+            | MetadataValue::FloatArray(_)
+            | MetadataValue::StringArray(_)
+            | MetadataValue::SparseVector(_) => None,
+        })
+}
+
+fn sort_records(records: &mut [ProjectionRecord], order: &GetOrder) {
+    records.sort_by(|left, right| {
+        let left_value = sortable_metadata_value(left, order);
+        let right_value = sortable_metadata_value(right, order);
+
+        let value_order = match (left_value, right_value) {
+            (Some(lhs), Some(rhs)) => {
+                let base = lhs.partial_cmp(&rhs).unwrap_or(std::cmp::Ordering::Equal);
+                match order.direction {
+                    GetOrderDirection::Asc => base,
+                    GetOrderDirection::Desc => base.reverse(),
+                }
+            }
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, None) => std::cmp::Ordering::Equal,
+        };
+
+        value_order.then_with(|| left.id.cmp(&right.id))
+    });
+}
 
 #[derive(Debug, Error)]
 pub enum SqliteMetadataError {
@@ -1001,11 +1062,14 @@ impl SqliteMetadataReader {
                 where_clause,
             },
             limit: Limit { offset, limit },
+            order,
             proj: Projection {
                 document, metadata, ..
             },
         }: Get,
     ) -> Result<GetResult, SqliteMetadataError> {
+        let needs_metadata_for_sort = order.is_some();
+        let include_metadata = document || metadata || needs_metadata_for_sort;
         let mut filter_limit_query = Query::select();
         filter_limit_query.columns([
             (Embeddings::Table, Embeddings::Id),
@@ -1027,8 +1091,12 @@ impl SqliteMetadataReader {
 
         filter_limit_query
             .order_by((Embeddings::Table, Embeddings::Id), sea_query::Order::Asc)
-            .offset(offset as u64)
-            .limit(limit.unwrap_or(u32::MAX) as u64);
+            .offset(if needs_metadata_for_sort { 0 } else { offset as u64 })
+            .limit(if needs_metadata_for_sort {
+                u32::MAX as u64
+            } else {
+                limit.unwrap_or(u32::MAX) as u64
+            });
 
         let alias = Alias::new(SUBQ_ALIAS);
         let mut projection_query = Query::select();
@@ -1039,7 +1107,7 @@ impl SqliteMetadataReader {
             ])
             .from_subquery(filter_limit_query, alias.clone());
 
-        if document || metadata {
+        if include_metadata {
             projection_query
                 .left_join(
                     EmbeddingMetadata::Table,
@@ -1073,10 +1141,10 @@ impl SqliteMetadataReader {
                 id: user_id,
                 document: None,
                 embedding: None,
-                metadata: (document || metadata).then_some(HashMap::new()),
+                metadata: include_metadata.then_some(HashMap::new()),
             });
 
-            if document || metadata {
+            if include_metadata {
                 if let Ok(key) = row.try_get::<String, _>(2) {
                     if let Some(metadata) = record.metadata.as_mut() {
                         if let Ok(Some(s)) = row.try_get(3) {
@@ -1128,25 +1196,39 @@ impl SqliteMetadataReader {
             }
         }
 
+        let mut records = records
+            .into_values()
+            .map(|mut rec| {
+                if let Some(mut meta) = rec.metadata.take() {
+                    if let Some(MetadataValue::Str(doc)) = meta.remove(CHROMA_DOCUMENT_KEY) {
+                        rec.document = Some(doc);
+                    }
+                    if !meta.is_empty() {
+                        rec.metadata = Some(meta)
+                    }
+                }
+                rec
+            })
+            .collect::<Vec<_>>();
+
+        if let Some(ref order) = order {
+            sort_records(&mut records, order);
+            records = records
+                .into_iter()
+                .skip(offset as usize)
+                .take(limit.unwrap_or(u32::MAX) as usize)
+                .collect();
+        }
+
+        if !metadata {
+            for record in &mut records {
+                record.metadata = None;
+            }
+        }
+
         Ok(GetResult {
             pulled_log_bytes: 0,
-            result: ProjectionOutput {
-                records: records
-                    .into_values()
-                    .map(|mut rec| {
-                        if let Some(mut meta) = rec.metadata.take() {
-                            if let Some(MetadataValue::Str(doc)) = meta.remove(CHROMA_DOCUMENT_KEY)
-                            {
-                                rec.document = Some(doc);
-                            }
-                            if !meta.is_empty() {
-                                rec.metadata = Some(meta)
-                            }
-                        }
-                        rec
-                    })
-                    .collect(),
-            },
+            result: ProjectionOutput { records },
         })
     }
 }
@@ -1159,6 +1241,7 @@ mod tests {
     use chroma_types::{
         operator::{Filter, Limit, Projection, Scan},
         plan::{Count, Get, ReadLevel},
+        GetOrder, GetOrderDirection,
         strategies::{any_collection_data_and_where_filter, TestCollectionData},
         Chunk, CollectionAndSegments, ContainsOperator, DocumentOperator, LogRecord,
         MetadataComparison, MetadataExpression, MetadataValue, Operation, OperationRecord,
@@ -1250,6 +1333,7 @@ mod tests {
                     offset: 3,
                     limit: Some(6),
                 },
+                order: None,
                 proj: Projection {
                     document: true,
                     embedding: false,
@@ -1347,6 +1431,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: false,
                 embedding: false,
@@ -1384,6 +1469,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: false,
                 embedding: false,
@@ -1494,6 +1580,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: true,
                 embedding: false,
@@ -1523,6 +1610,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: false,
                 embedding: false,
@@ -1552,6 +1640,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: true,
                 embedding: false,
@@ -1609,6 +1698,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: false,
                 embedding: false,
@@ -2015,6 +2105,7 @@ mod tests {
                 offset: 0,
                 limit: None,
             },
+            order: None,
             proj: Projection {
                 document: true,
                 embedding: false,
@@ -3160,5 +3251,82 @@ mod tests {
         let plan = make_get_plan(&cas, Some(contains_arr));
         let result = reader.get(plan).await.expect("get");
         assert_eq!(result.result.records.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_order_by_numeric_metadata_desc_with_pagination() {
+        let logs = vec![
+            LogRecord {
+                log_offset: 0,
+                record: OperationRecord {
+                    id: "id1".to_string(),
+                    metadata: Some(HashMap::from([(
+                        "last_accessed_at".to_string(),
+                        UpdateMetadataValue::Float(10.0),
+                    )])),
+                    document: Some("doc1".to_string()),
+                    operation: Operation::Add,
+                    embedding: None,
+                    encoding: None,
+                },
+            },
+            LogRecord {
+                log_offset: 1,
+                record: OperationRecord {
+                    id: "id2".to_string(),
+                    metadata: Some(HashMap::from([(
+                        "last_accessed_at".to_string(),
+                        UpdateMetadataValue::Float(30.0),
+                    )])),
+                    document: Some("doc2".to_string()),
+                    operation: Operation::Add,
+                    embedding: None,
+                    encoding: None,
+                },
+            },
+            LogRecord {
+                log_offset: 2,
+                record: OperationRecord {
+                    id: "id3".to_string(),
+                    metadata: Some(HashMap::from([(
+                        "last_accessed_at".to_string(),
+                        UpdateMetadataValue::Float(20.0),
+                    )])),
+                    document: Some("doc3".to_string()),
+                    operation: Operation::Add,
+                    embedding: None,
+                    encoding: None,
+                },
+            },
+        ];
+
+        let (reader, cas) = setup_with_logs(logs).await;
+        let plan = Get {
+            scan: Scan {
+                collection_and_segments: cas,
+            },
+            filter: Filter {
+                query_ids: None,
+                where_clause: None,
+            },
+            limit: Limit {
+                offset: 1,
+                limit: Some(1),
+            },
+            order: Some(GetOrder {
+                metadata_key: "last_accessed_at".to_string(),
+                direction: GetOrderDirection::Desc,
+            }),
+            proj: Projection {
+                document: true,
+                embedding: false,
+                metadata: false,
+            },
+        };
+
+        let result = reader.get(plan).await.expect("get");
+        assert_eq!(result.result.records.len(), 1);
+        assert_eq!(result.result.records[0].id, "id3");
+        assert!(result.result.records[0].metadata.is_none());
     }
 }

@@ -2679,6 +2679,7 @@ async fn collection_get(
         // TODO: Limit shouldn't be optional here
         validated_limit,
         payload.offset.unwrap_or(0),
+        payload.order,
         payload.include,
     )?;
     let res = Box::pin(

@@ -406,6 +406,8 @@ class AsyncClient(SharedSystemClient, AsyncClientAPI):
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         where_document: Optional[WhereDocument] = None,
+        order_by: Optional[str] = None,
+        order: str = "asc",
         include: Include = IncludeMetadataDocuments,
     ) -> GetResult:
         return await self._server._get(
@@ -415,6 +417,8 @@ class AsyncClient(SharedSystemClient, AsyncClientAPI):
             limit=limit,
             offset=offset,
             where_document=where_document,
+            order_by=order_by,
+            order=order,
             include=include,
             tenant=self.tenant,
             database=self.database,
